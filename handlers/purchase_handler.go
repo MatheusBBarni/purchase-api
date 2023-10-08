@@ -8,4 +8,5 @@ import (
 func NewPurchaseHandler(router fiber.Router, purchaseController *controllers.PurchaseController) {
 	router.Post("", purchaseController.SavePurchase)
 	router.Get("", purchaseController.GetAllPurchases)
+	router.Get(":id/convert/:currency", purchaseController.ConvertPurchaseAmount)
 }
