@@ -45,7 +45,14 @@ func (purchaseController *PurchaseController) SavePurchase(c *fiber.Ctx) error {
 		})
 	}
 
-	purchase, err := purchaseController.purchaseRepository.Save(purchaseDto.ToDomain())
+	purchaseTransformed, err := purchaseDto.ToDomain()
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	purchase, err := purchaseController.purchaseRepository.Save(purchaseTransformed)
 
 	if err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
@@ -53,22 +60,25 @@ func (purchaseController *PurchaseController) SavePurchase(c *fiber.Ctx) error {
 		})
 	}
 
-	return c.Status(200).JSON(purchase)
+	return c.Status(http.StatusOK).JSON(purchase)
 }
 
-type currencies = []*dto.CurrencyDto
 type currencyApiResponse struct {
-	Data currencies `json:"data"`
+	Data []*dto.CurrencyDto `json:"data"`
 }
 
-func (purchaseController *PurchaseController) getExchangeRate(currencies currencies, selectedCurrency string) (float64, error) {
+func (purchaseController *PurchaseController) getCurrency(currencies []*dto.CurrencyDto, selectedCurrency string) (*dto.CurrencyDto, error) {
 	for _, value := range currencies {
 		if value.Currency == selectedCurrency {
-			return strconv.ParseFloat(value.ExchangeRate, 64)
+			return value, nil
 		}
 	}
 
-	return 0.0, errors.New("currency not found")
+	return &dto.CurrencyDto{}, errors.New("currency not found")
+}
+
+func (purchaseController *PurchaseController) convertAmount(amount, exchangeRate float64) float64 {
+	return amount * exchangeRate
 }
 
 func (purchaseController *PurchaseController) ConvertPurchaseAmount(c *fiber.Ctx) error {
@@ -83,16 +93,50 @@ func (purchaseController *PurchaseController) ConvertPurchaseAmount(c *fiber.Ctx
 		})
 	}
 
-	exchangeRate, err := purchaseController.getExchangeRate(currencyApiResponse.Data, currency)
+	selectedCurrency, err := purchaseController.getCurrency(currencyApiResponse.Data, currency)
 	if err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
-	return c.Status(200).JSON(fiber.Map{
-		"exchangeRate": exchangeRate,
-		"purchaseId":   purchaseId,
-		"currency":     currency,
+	parsedId, err := utils.ConvertStringToUint(purchaseId)
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+	purchase := purchaseController.purchaseRepository.GetById(parsedId)
+
+	currencyRecordDate, err := utils.ConvertStringToDate(selectedCurrency.RecordDate)
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	dateDifferenceInMonths := purchase.TransactionDate.Sub(currencyRecordDate).Hours() / 24 / 30
+	if dateDifferenceInMonths > 6 {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+			"error": "Purchase cannot be converted to the target currency",
+		})
+	}
+
+	exchangeRate, err := strconv.ParseFloat(selectedCurrency.ExchangeRate, 64)
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	convertedAmount := utils.ConvertFloatToTwoDecimals(purchaseController.convertAmount(purchase.Amount, exchangeRate))
+
+	return c.Status(http.StatusOK).JSON(fiber.Map{
+		"id":               purchase.ID,
+		"description":      purchase.Description,
+		"transaction_date": purchase.TransactionDate,
+		"purchase_amount":  purchase.Amount,
+		"exchange_rate":    exchangeRate,
+		"converted_amount": convertedAmount,
 	})
 }
