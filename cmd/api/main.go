@@ -7,9 +7,9 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/matheusBBarni/purchase-api/config"
-	"github.com/matheusBBarni/purchase-api/controllers"
 	handlers "github.com/matheusBBarni/purchase-api/handlers"
 	"github.com/matheusBBarni/purchase-api/repositories"
+	"github.com/matheusBBarni/purchase-api/services"
 )
 
 func main() {
@@ -26,10 +26,10 @@ func main() {
 	currencyHttpClient := config.NewHttpClient(currencyApiClient, currencyApiUrl)
 
 	purchaseRepository := repositories.NewPurchaseRepository(db)
-	purchaseController := controllers.NewPurchaseController(purchaseRepository, currencyHttpClient)
+	purchaseService := services.NewPurchaseService(purchaseRepository, currencyHttpClient)
 
 	v1 := app.Group("/v1")
-	handlers.NewPurchaseHandler(v1.Group("/purchase"), purchaseController)
+	handlers.NewPurchaseHandler(v1.Group("/purchase"), purchaseService)
 
 	app.Listen(":8080")
 }

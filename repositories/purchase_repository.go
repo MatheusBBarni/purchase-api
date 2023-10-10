@@ -41,7 +41,7 @@ func (purchaseRepository *PurchaseRepository) Save(purchase *domain.Purchase) (*
 	return purchase, nil
 }
 
-func (purchaseRepository *PurchaseRepository) Update(id uint, purchase *domain.Purchase) (*domain.Purchase, error) {
+func (purchaseRepository *PurchaseRepository) Update(purchase *domain.Purchase) (*domain.Purchase, error) {
 	err := purchaseRepository.db.Model(&purchase).UpdateColumns(purchase).Error
 
 	if err != nil {
