@@ -29,7 +29,7 @@ func NewPurchaseHandler(router fiber.Router, purchaseService *services.PurchaseS
 	})
 
 	router.Get("", func(c *fiber.Ctx) error {
-		purchases := purchaseService.GetAllPurchases
+		purchases := purchaseService.GetAllPurchases()
 
 		return c.Status(http.StatusOK).JSON(purchases)
 	})
